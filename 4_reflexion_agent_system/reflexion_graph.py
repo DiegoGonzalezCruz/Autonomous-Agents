@@ -21,7 +21,7 @@ graph.add_edge("execute_tools", "revisor")
 def event_loop(state: List[BaseMessage]) -> str:
     count_tool_visits = sum(isinstance(item, ToolMessage) for item in state)
     num_iterations = count_tool_visits
-    if num_iterations > MAX_ITERATIONS:
+    if num_iterations >= MAX_ITERATIONS:
         return END
     return "execute_tools"
 
