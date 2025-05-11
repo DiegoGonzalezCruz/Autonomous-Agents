@@ -1,43 +1,39 @@
 import json
-from typing import List
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from typing import List, Dict, Any
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage, HumanMessage
 from langchain_community.tools import TavilySearchResults
 
 # Create the Tavily search tool
 tavily_tool = TavilySearchResults(max_results=5)
 
 
+# Function to execute search queries from AnswerQuestion tool calls
 def execute_tools(state: List[BaseMessage]) -> List[BaseMessage]:
     last_ai_message: AIMessage = state[-1]
 
-    # If there were no tool_calls, nothing to append
-    if not getattr(last_ai_message, "tool_calls", None):
+    # Extract tool calls from the AI message
+    if not hasattr(last_ai_message, "tool_calls") or not last_ai_message.tool_calls:
         return []
 
-    tool_messages: List[ToolMessage] = []
+    # Process the AnswerQuestion or ReviseAnswer tool calls to extract search queries
+    tool_messages = []
 
     for tool_call in last_ai_message.tool_calls:
-        name = tool_call["name"]
-        call_id = tool_call["id"]
+        if tool_call["name"] in ["AnswerQuestion", "RevisedAnswer"]:
+            call_id = tool_call["id"]
+            search_queries = tool_call["args"].get("search_queries", [])
 
-        # Only handle AnswerQuestion and ReviseAnswer for now
-        if name not in ["AnswerQuestion", "ReviseAnswer"]:
-            continue
+            # Execute each search query using the tavily tool
+            query_results = {}
+            for query in search_queries:
+                result = tavily_tool.invoke(query)
+                query_results[query] = result
 
-        search_queries = tool_call["args"].get("search_queries", [])
-
-        # Run each query
-        query_results = {}
-        for q in search_queries:
-            query_results[q] = tavily_tool.invoke(q)
-
-        # Build the ToolMessage with name, tool_call_id, and content
-        tool_messages.append(
-            ToolMessage(
-                name=name,
-                tool_call_id=call_id,
-                content=json.dumps(query_results),
+            # Create a tool essage with the search results
+            tool_messages.append(
+                ToolMessage(
+                    content=json.dumps(query_results),
+                    tool_call_id=call_id,
+                )
             )
-        )
-
     return tool_messages
