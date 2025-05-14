@@ -3,8 +3,11 @@ from langgraph.graph import add_messages, StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_core.messages import AIMessage, HumanMessage
 from dotenv import load_dotenv
+from langgraph.checkpoint.memory import MemorySaver
 
 load_dotenv()
+
+memory = MemorySaver()
 
 llm = ChatGroq(model="llama-3.1-8b-instant")
 
@@ -20,15 +23,19 @@ def chatbot(state: BasicChatState):
 graph = StateGraph(BasicChatState)
 
 graph.add_node("chatbot", chatbot)
-graph.set_entry_point("chatbot")
 graph.add_edge("chatbot", END)
+graph.set_entry_point("chatbot")
+app = graph.compile(checkpointer=memory)
 
-app = graph.compile()
+config = {"configurable": {"thread_id": 2}}
+
 
 while True:
     user_input = input("User: ")
     if user_input in ["exit", "end"]:
         break
     else:
-        result = app.invoke({"messages": [HumanMessage(content=user_input)]})
-        print(result)
+        result = app.invoke(
+            {"messages": [HumanMessage(content=user_input)]}, config=config
+        )
+        print("AI: " + result["messages"][-1].content)
